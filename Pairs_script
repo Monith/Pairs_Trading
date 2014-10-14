@@ -1,0 +1,280 @@
+#R-Script
+
+for (i in 1425:length(CVX.close)) {
+  if(CVX.close[i] > 50) {
+    CVX.close[i] <- (CVX.close[i]/2)
+  }
+}
+#accounts for splits
+
+for (i in 1360:length(XOM.close)) {
+  if(XOM.close[i] > 50) {
+    XOM.close[i] <- (XOM.close[i]/2)
+  }
+}
+#accounts for splits
+
+nosplit <- function(close) {
+  
+  j <- 1
+  for (i in 1:(length(close)-1)) {
+    if((close[i+1] >= (1.5 * close[i]))) {
+      temp[j] <- i+1
+      j <- j + 1
+    }
+    
+  for(j in 1:(j-1)){
+    for (i in temp[j]:length(close)) {
+      close[i] <- close[i]/2
+      }
+  }
+    return(close)
+} #function to take away splits
+  
+#takes away splits in test data 
+close.CVX <- nosplit(restCVX$Close)
+close.XOM <- nosplit(restXOM$Close)
+plot(close.CVX, type ='l')
+lines(close.XOM,col = 'red')
+
+#graphs the rest of the data(not test data)
+full.ratio <- close.CVX / close.XOM
+plot(full.ratio,type ='l',ylab = 'ratio', xlab = 'days',
+     main = 'Real Life Data of the Rest of the Data points')
+abline(mean.ratio,0,col = 'red')
+abline(mspos,0,col = 'blue')
+abline(msneg,0,col = 'blue')
+
+#graphs the test data and calculates varies variables
+test.ratio <- CVX.close/XOM.close
+test.mean <- mean(test.ratio)
+sd <- sd(test.ratio)
+mean <- mean(ratio)
+sd.ratio <- sd(ratio)
+mspos <- mean.ratio + sd.ratio
+msneg <- mean.ratio - sd.ratio
+plot(test.ratio, type = 'l',ylab = 'ratio', xlab = 'days',
+     main = 'Real Life Test Data(First 5 Years)')
+abline(mean.ratio,0,col = 'red')
+abline(mspos,0,col = 'blue')
+abline(msneg,0,col = 'blue')
+
+#Real Life Analysis:
+
+profit <- function(k,ratio,stock1,stock2,ratio.standard) {
+  
+  mean.ratio <- mean(ratio.standard)
+  sd.ratio <- sd(ratio.standard)
+  ks <- sd.ratio * k
+  mspos <- mean.ratio + ks
+  msneg <- mean.ratio - ks
+  profit.temp <- 0
+  check.top <- 2
+  check.bottom <- 2
+  check.mean.top <- 2
+  check.mean.bottom <- 2
+  #sets check variables and all other variables
+  
+  if(ratio[1] > (mspos)) {
+    temp.buy <- (1/stock2[1])
+    temp.sell <- (1/stock1[1])
+    check.top <- check.top + 1
+  } #if first value is above line
+  
+  if(ratio[1] < (msneg)) {
+    temp.buy <- (1/stock1[1])
+    temp.sell <- (1/stock2[1])
+    check.bottom <- check.bottom + 1
+  } #if first value is below line
+  
+  for(i in 2:(length(ratio))) {
+    
+    if((ratio[i] > (mspos)) && (check.top %% 2 == 0) &&
+         (check.mean.bottom %% 2 != 0)) {
+      temp.buy <- (1/stock2[i])
+      temp.sell <- (1/stock1[i])
+      check.top <- check.top + 1
+      #check.mean.bottom <- check.mean.bottom + 1
+      #print(ratio[i])
+      #print(i)
+    } #if value is above line
+    
+    if((ratio[i] < (msneg)) && (check.bottom %% 2 == 0) &&
+         (check.mean.top %% 2 != 0)) {
+      temp.buy <- (1/stock1[i])
+      temp.sell <- (1/stock2[i])
+      check.botom <- check.bottom + 1
+      #check.mean.top <- check.mean.top + 1
+      #print(ratio[i])
+      #print(i)
+    } #if value is below line
+    
+    if((ratio[i] < mean.ratio) && (check.top %% 2 != 0) &&
+         (check.mean.top %% 2 == 0)){
+      price.buy <- temp.sell * stock1[i]
+      price.sell <- temp.buy * stock2[i]
+      profit.temp <- profit.temp + price.sell - price.buy
+      check.top <- check.top + 1
+      check.mean.top <- check.mean.top +1
+      #print(ratio[i])
+      #print(i)
+    } #if value hits mean coming from the top
+    
+    if((ratio[i] > mean.ratio) && (check.bottom %% 2 != 0) && 
+         (check.mean.bottom %% 2 == 0)){
+      price.buy <- temp.sell * stock2[i]
+      price.sell <- temp.buy * stock1[i]
+      profit.temp <- profit.temp + price.sell - price.buy
+      check.bottom <- check.bottom + 1
+      check.mean.bottom <- check.mean.bottom + 1
+      #print(ratio[i])
+      #print(i)
+    } #if value hits mean coming from the bottom
+  }
+  
+  if((check.top %% 2 != 0) || (check.bottom %% 2 != 0)){
+    price.buy <- temp.sell * stock2[i]
+    price.sell <- temp.buy * stock1[i]
+    profit.temp <- profit.temp + price.sell - price.buy
+    #print(ratio[i])
+    #print(i)
+  } #closes if it isn't done so by the end of the data set
+  
+  return(profit.temp)
+} # function that calculates the profit of a ratio of stocks using pairs trading
+  # worked with Melysa Cheatham in order to come up with the profit function
+
+max.k <- function(ratio,stock1,stock2) {
+  
+  r.mean <- mean(ratio)
+  r.sd <- sd(ratio)
+  upper.k <- (max(ratio) - r.mean)/r.sd
+  lower.k <- (r.mean - min(ratio))/r.sd
+  maxk <- min(upper.k,lower.k)
+  #gets the max value k can be
+  
+  k.seq = seq(0, maxk, 0.01)
+  length <- (length(k.seq))
+  
+  for(j in 1:length) {
+    temp[j] <- profit(k.seq[j],ratio,stock1,stock2,ratio)   
+  }
+  
+  max.profit <- (temp == max(temp))
+  index = match(T, max.profit)
+  
+  return(k.seq[index])
+}# returns optimal k value
+  
+#Simulation Code:
+
+
+stocksim <- function(rho, psi, beta1, beta2) {
+  X1 <- rep(NA,4000)
+  X2 <- rep(NA,4000)
+  Y1 <- rep(NA,4000)
+  Y2 <- rep(NA,4000)
+  stock <- data.frame(Y1,Y2)
+  
+  X1[1] <- rnorm(1,0,1)
+  X2[1] <- rnorm(1,0,1)
+  
+  for(k in 2:4000) {
+    X1[k] <- rho * X1[k-1] + psi * (1-rho) * X2[k-1] + rnorm(1,0,1)
+    X2[k] <- rho * X2[k-1] + psi * (1-rho) * X1[k-1] + rnorm(1,0,1)
+  } # gets all the X-values
+  
+  for(i in 1:4000) {
+    stock$Y1[i] = 100 + beta1 * i + X1[i]
+    stock$Y2[i] = 100 + beta2 * i + X2[i] 
+  } # gets all the y-values and stores them in the stock data frame
+  
+  return(stock) # returns data frame with both variables
+} #function that simulates stock prices according to the function given
+  
+four.plot <- function() {
+  
+  stock1 <- stocksim(.99,0,0,0) #No cross-correlation, no trends
+  stock2 <- stocksim(.99,.9,0,0) #Cross-correlation, no trends
+  stock3 <- stocksim(.99,.9,.01,.01) #Cross correlation, both increasing
+  stock4 <- stocksim(.99,.9,.01,-.01) #Cross correlation, opposite trends
+  
+  quickplot(stock1$Y1,stock1$Y2,'No cross-correlation, no trends')
+  quickplot(stock2$Y1,stock2$Y2,'Cross-correlation, no trends')
+  quickplot(stock3$Y1,stock3$Y2,'Cross correlation, both increasing')
+  quickplot(stock4$Y1,stock4$Y2,'Cross correlation, opposite trends')
+  
+} #function that plots four different stocks
+
+quickplot <- function (Y1,Y2,title){
+
+  plot(Y1, type = 'l', ylim = c(25,175),xlab = 'Day',ylab = 'Price',main = title)
+  lines(Y2,col = 'red')
+  legend("topleft", c("Y1","Y2"), cex = .45, col = c("black","red"),
+       fill = c("black","red"))
+} #plot function that simply plots two vectors(stocks) and title
+  
+simulate <- function(rho,psi,beta1,beta2) {
+  
+  profit.temp <- 0
+  for(i in 1:1000){
+    stock <- stocksim(rho,psi,beta1,beta2) # No cross-correlation, no trends
+    Y1.temp <- stock$Y1[1:2000]
+    Y2.temp <- stock$Y2[1:2000]
+    ratio <- Y1.temp/Y2.temp
+    
+    Y1.rest <- stock$Y1[2001:4000]
+    Y2.rest <- stock$Y2[2001:4000]
+    rest.ratio <- Y1.rest/Y2.rest
+    
+    k = max.k(ratio,Y1.temp,Y2.temp)
+    profit.temp <- profit(k,rest.ratio,Y1.rest,Y2.rest,ratio) + profit.temp
+  }
+  avg = profit.temp/5
+  return(avg)  
+} #simulates two different stock prices and calculates the 
+  #average profit over 1000 trials
+
+#running the simulation on different values(given values)
+point1 <- simulate(.99,0,0,0)
+point2 <- simulate(.99,.9,0,0)
+point3 <- simulate(.99,.9,.01,.01)
+point4 <- simulate(.99,.9,.01,-.01)
+
+#different values of psi
+point5 <- simulate(.99,.25,0,0)
+point6 <- simulate(.99,.50,0,0)
+point7 <- simulate(.99,.75,0,0)
+  
+point8 <- simulate(.99,.25,.01,.01)
+point9 <- simulate(.99,.50,.01,.01)
+point10 <- simulate(.99,.75,.01,.01)
+  
+point11 <- simulate(.99,.25,.01,-.01)
+point12 <- simulate(.99,.50,.01,-.01)
+point13 <- simulate(.99,.75,.01,-.01)
+  
+#vectors of psi value changes
+changepsi1 <- c(point5,point6,point7,point2)
+changepsi2 <- c(point8,point9,point10,point3)
+changepsi3 <- c(point11,point12,point13,point4)
+increment <- c(.25,.50,.75,.99)
+
+#plot to see change in psi values
+plot(changepsi1~increment, type = 'l',xlab = 'Increment',
+     ylab = 'average profit',ylim = c(-.08,.120), main = 'Difference in psi values')
+lines(changepsi2~increment, col = 'red')
+lines(changepsi3, col = 'blue')
+  
+#vectors to see change in Beta values
+changebeta1 <- c(point2,point3,point4)
+changebeta2 <- c(point5,point8,point11)
+changebeta3 <- c(point6,point9,point12)
+changebeta4 <- c(point7,point10,point13)
+  
+#plot to see change in beta values
+plot(changebeta1, type = 'l',xlab = 'Different Beta parameters',
+     ylab = 'average profit', main = 'Difference in Beta values')
+lines(changebeta2, col = 'red')
+lines(changebeta3, col = 'blue')
+lines(changebeta4, col = 'purple')
